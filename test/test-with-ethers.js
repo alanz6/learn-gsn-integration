@@ -57,9 +57,11 @@ describe('using ethers with OpenGSN', () => {
 
     describe('make a call', async () => {
         it('should not pay for gas (balance=0)', async () => {
-            assert.equal(0, await tokenStorage.provider.getBalance(from))
+            const initialEthBalance = await tokenStorage.provider.getBalance(from);
+            assert.equal(0, initialEthBalance)
             await tokenStorage.store(0);
-            assert.equal(0, await tokenStorage.provider.getBalance(from))
+            const finalEthBalance = await tokenStorage.provider.getBalance(from);
+            assert.equal(0, finalEthBalance)
         })
     })
 })
