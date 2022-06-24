@@ -7,26 +7,33 @@ const { assert } = require('chai')
 const Web3HttpProvider = require( 'web3-providers-http')
 
 //we still use truffle compiled files
-const Counter = require('../artifacts/contracts/Counter.sol/Counter')
+const Token = require('../artifacts/contracts/Token.sol/Token')
+const TokenStorage = require('../artifacts/contracts/Token.sol/TokenStorage')
 
 describe('using ethers with OpenGSN', () => {
-    let counter
+    let hardhatToken;
+    let tokenStorage;
     let accounts
     let web3provider
     let from
+    let owner
     before(async () => {
-	let env = await GsnTestEnvironment.startGsn('localhost')
+        let env = await GsnTestEnvironment.startGsn('localhost')
 
-	const { paymasterAddress, forwarderAddress } = env.contractsDeployment
+        const { paymasterAddress, forwarderAddress } = env.contractsDeployment
     
         const web3provider = new Web3HttpProvider('http://localhost:8545')
  
-        const deploymentProvider= new ethers.providers.Web3Provider(web3provider)
+        const deploymentProvider = new ethers.providers.Web3Provider(web3provider)
+        owner = deploymentProvider.getSigner();
 
-        const factory = new ethers.ContractFactory(Counter.abi, Counter.bytecode, deploymentProvider.getSigner())
+        const tokenFactory = new ethers.ContractFactory(Token.abi, Token.bytecode, owner)
+        hardhatToken = await tokenFactory.deploy();
+        await hardhatToken.deployed();
 
-        counter = await factory.deploy(forwarderAddress)
-        await counter.deployed()
+        const storageFactory = new ethers.ContractFactory(TokenStorage.abi, TokenStorage.bytecode, owner)
+        tokenStorage = await storageFactory.deploy(forwarderAddress, hardhatToken.address);
+        await tokenStorage.deployed()
 
         const config = await {
             // loggerConfiguration: { logLevel: 'error'},
@@ -45,32 +52,15 @@ describe('using ethers with OpenGSN', () => {
 
         // gsnProvider is now an rpc provider with GSN support. make it an ethers provider:
         const etherProvider = new ethers.providers.Web3Provider(gsnProvider)
-
-        counter = counter.connect(etherProvider.getSigner(from))
+        tokenStorage = tokenStorage.connect(etherProvider.getSigner(from))
     })
 
     describe('make a call', async () => {
-        let counterChange
-        let balanceUsed
-        before(async () => {
-            const countBefore = await counter.counter()
-            await counter.increment( {gasLimit: 1e6})
-            const countAfter = await counter.counter()
-            counterChange = countAfter - countBefore
-        })
-
-        it('should make a call (have counter incremented)', async () => {
-
-            assert.equal(1, counterChange)
-        })
-
         it('should not pay for gas (balance=0)', async () => {
-            assert.equal(0, await counter.provider.getBalance(from))
+            assert.equal(0, await tokenStorage.provider.getBalance(from))
+            await tokenStorage.store(0);
+            assert.equal(0, await tokenStorage.provider.getBalance(from))
         })
-
-        it('should see the real caller', async () => {
-            assert.equal(from.toLowerCase(), (await counter.lastCaller()).toLowerCase())
-        });
     })
 })
 
